@@ -13,12 +13,12 @@ A static Progressive Web App (PWA) for studying Professional Scrum Product Owner
 - Add your own lessons/notes manually
 - Flashcards with simple spaced repetition
 - Practice quiz with instant feedback
-- Optional GitHub question-bank loader that parses the public Ditectrev PSPO I markdown bank into local storage
-- Auto-generated study explanations for imported GitHub questions that do not include explanations
-- Quiz and Exam randomly sample from the combined built-in + imported question bank
+- Fully built-in local PSPO question bank with original practice questions and explanations
+- Quiz and Exam shuffle the local question bank and then randomly select questions
 - Exam simulator: 80 questions, 60 minutes, 85% target
 - Mistake review with explanations
 - Offline caching after first load
+- Question-bank dashboard stats: total questions, core/expanded count, seen count, unseen count, answered count, and accuracy
 - Progress stored locally in the browser
 
 ## Run locally on your computer
@@ -94,14 +94,19 @@ This app is not affiliated with Scrum.org and does not include official Scrum.or
 - Added a Scrum Guide visual map with the same six-color scheme: Scrum Definition, Scrum Team, Scrum Artifacts, Scrum Events, Scrum Theory, and Scrum Values.
 - The chart is horizontally scrollable on small iPhone screens.
 
+## v10 update
 
-## v8 update
+- Removed all GitHub/network question-bank importing.
+- Added a fully local expanded question bank directly inside `data.js`.
+- The question bank now contains 347 local questions total: 84 original core questions plus 263 expanded original questions.
+- Every expanded question includes an explanation and Scrum Guide reference.
+- Dashboard shows total questions, core questions, expanded questions, seen/unseen coverage, answered count, and accuracy.
+- Quiz and Exam shuffle the full local bank first, then select questions randomly.
+- Export/import still saves your progress, highlights, custom cards, custom lessons, Study Later items, mistakes, and question history.
+- Offline cache updated to v10.
 
-- Added a **Question bank** panel on the Dashboard.
-- Added **Load GitHub bank** to parse the public Ditectrev PSPO I GitHub README into local storage on your own device.
-- The app does not hard-code the third-party GitHub questions in the zip; it loads them from the public source when you press the button, then stores them locally.
-- Imported GitHub questions are deduplicated against the built-in bank.
-- Imported questions receive concise auto-generated explanations based on Scrum Guide concepts when no explanation is provided.
-- Quiz and Exam now randomly sample from the combined bank.
-- Export/import backups now include imported questions.
-- Offline cache updated to v8.
+## Question bank behavior
+
+The app uses only its built-in local question bank. It does not fetch or import questions from GitHub or any other online source.
+
+Quiz and Exam always shuffle the local bank before selecting questions. The Dashboard shows how many questions are available, how many you have seen, how many remain unseen, how many you have answered, and your answer accuracy.
