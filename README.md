@@ -83,3 +83,10 @@ This app is not affiliated with Scrum.org and does not include official Scrum.or
 - Highlights now use the exact selected range in the Scrum Guide paragraph, not every matching word.
 - Selecting a repeated word such as "value" only highlights that specific selected occurrence.
 - Older v5 text-only highlights are rendered only once rather than across every matching paragraph.
+
+## v7 update
+
+- Added a new **Chart** tab immediately after **Dashboard**.
+- Reordered tabs to: Dashboard, Chart, Guide, Learn, Study Later, Cards, Quiz, Exam, Review.
+- Added a Scrum Guide visual map with the same six-color scheme: Scrum Definition, Scrum Team, Scrum Artifacts, Scrum Events, Scrum Theory, and Scrum Values.
+- The chart is horizontally scrollable on small iPhone screens.

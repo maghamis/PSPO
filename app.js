@@ -8,6 +8,15 @@ const EXAM_QUESTION_COUNT = 80;
 const EXAM_DURATION_SEC = 60 * 60;
 const PASS_MARK = 85;
 
+const scrumChartGroups = [
+  { title: 'Scrum Definition', className: 'definition', items: ['Scrum is a lightweight framework', 'Generate value', 'Adaptive solutions', 'Complex problems'] },
+  { title: 'Scrum Team', className: 'team', items: ['Developers', 'Product Owner', 'Scrum Master'] },
+  { title: 'Scrum Artifacts', className: 'artifacts', items: ['Product Backlog', 'Sprint Backlog', 'Increment'] },
+  { title: 'Scrum Events', className: 'events', items: ['The Sprint', 'Sprint Planning', 'Daily Scrum', 'Sprint Review', 'Sprint Retrospective'] },
+  { title: 'Scrum Theory', className: 'theory', items: ['Transparency', 'Inspection', 'Adaptation'] },
+  { title: 'Scrum Values', className: 'values', items: ['Commitment', 'Focus', 'Openness', 'Respect', 'Courage'] }
+];
+
 const app = document.getElementById('app');
 const tabs = Array.from(document.querySelectorAll('.tab'));
 let deferredInstallPrompt = null;
@@ -121,8 +130,9 @@ if ('serviceWorker' in navigator) {
 function render() {
   const route = state.currentRoute || 'dashboard';
   if (route === 'dashboard') renderDashboard();
-  if (route === 'learn') renderLearn();
+  if (route === 'chart') renderScrumChart();
   if (route === 'guide') renderGuide();
+  if (route === 'learn') renderLearn();
   if (route === 'study') renderStudyLater();
   if (route === 'flashcards') renderFlashcards();
   if (route === 'quiz') renderQuiz();
@@ -202,6 +212,42 @@ function renderDashboard() {
       </div>
     </section>
   `;
+  bindCommonActions();
+}
+
+
+function renderScrumChart() {
+  app.innerHTML = `
+    <section class="card scrum-chart-card">
+      <div class="scrum-chart-stripes" aria-hidden="true">
+        ${scrumChartGroups.map(g => `<span class="scrum-stripe ${esc(g.className)}"></span>`).join('')}
+      </div>
+      <div class="scrum-chart-head">
+        <div>
+          <p class="eyebrow">Visual map</p>
+          <h2>The Scrum Guide</h2>
+          <p>Use this quick chart to memorize the main Scrum structure before reading the full Guide.</p>
+        </div>
+        <div class="pill-row">
+          <span class="pill">6 focus areas</span>
+          <span class="pill">Exam quick review</span>
+        </div>
+      </div>
+      <div class="scrum-chart-grid" role="list">
+        ${scrumChartGroups.map(group => `
+          <article class="scrum-chart-column ${esc(group.className)}" role="listitem">
+            <div class="scrum-chart-title">${esc(group.title)}</div>
+            <div class="scrum-chart-items">
+              ${group.items.map(item => `<div class="scrum-chart-item">${esc(item)}</div>`).join('')}
+            </div>
+          </article>
+        `).join('')}
+      </div>
+      <div class="button-row">
+        <button class="primary-btn" data-action="go" data-route="guide">Open Scrum Guide</button>
+        <button class="secondary-btn" data-action="go" data-route="learn">Open Learn tab</button>
+      </div>
+    </section>`;
   bindCommonActions();
 }
 
