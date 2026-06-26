@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pspo-study-coach-v2';
+const CACHE_NAME = 'pspo-study-coach-v6';
 const ASSETS = [
   './',
   './index.html',

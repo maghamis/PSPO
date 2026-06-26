@@ -20,6 +20,7 @@ const defaultState = () => ({
   examAttempts: [],
   mistakes: [],
   studyLater: [],
+  guideHighlights: [],
   customFlashcards: [],
   customLessons: [],
   activeQuiz: null,
@@ -152,12 +153,16 @@ function renderDashboard() {
         </div>
       </div>
       <div class="card">
-        <h2>Install on iPhone</h2>
-        <p>After hosting this folder online, open the URL in Safari, tap <span class="kbd">Share</span>, then <span class="kbd">Add to Home Screen</span>. It will open like an app.</p>
+        <h2>Install + backup</h2>
+        <p>After hosting this folder online, open the URL in Safari, tap <span class="kbd">Share</span>, then <span class="kbd">Add to Home Screen</span>. Your progress still stays in this device/browser unless you export and import it.</p>
         <div class="pill-row">
           <span class="pill">Offline cache ready</span>
           <span class="pill">Local progress</span>
-          <span class="pill">No login needed</span>
+          <span class="pill">Manual backup</span>
+        </div>
+        <div class="button-row">
+          <button class="secondary-btn" data-action="export-data" type="button">Export data</button>
+          <button class="secondary-btn" data-action="import-data" type="button">Import data</button>
         </div>
       </div>
     </section>
@@ -747,6 +752,51 @@ function captureGuideSelection(save = true) {
   return text;
 }
 
+function closestGuideParagraph(node) {
+  if (!node) return null;
+  const element = node.nodeType === 1 ? node : node.parentElement;
+  return element?.closest?.('.guide-paragraph') || null;
+}
+
+function getSelectedGuideRange() {
+  const sel = window.getSelection?.();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  const root = document.getElementById('guideText');
+  if (!root) return null;
+  const range = sel.getRangeAt(0);
+  if (!root.contains(range.commonAncestorContainer)) return null;
+
+  const startParagraph = closestGuideParagraph(range.startContainer);
+  const endParagraph = closestGuideParagraph(range.endContainer);
+  if (!startParagraph || !endParagraph || startParagraph !== endParagraph) return null;
+
+  const rawSelected = range.toString();
+  const clean = normalizeText(rawSelected);
+  if (!clean) return null;
+
+  const beforeRange = document.createRange();
+  beforeRange.selectNodeContents(startParagraph);
+  beforeRange.setEnd(range.startContainer, range.startOffset);
+
+  let start = beforeRange.toString().length;
+  let end = start + rawSelected.length;
+  const leadingWhitespace = rawSelected.match(/^\s*/)?.[0]?.length || 0;
+  const trailingWhitespace = rawSelected.match(/\s*$/)?.[0]?.length || 0;
+  start += leadingWhitespace;
+  end -= trailingWhitespace;
+
+  const fullText = startParagraph.textContent || '';
+  if (start < 0 || end > fullText.length || start >= end) return null;
+
+  return {
+    text: fullText.slice(start, end),
+    section: startParagraph.dataset.section || 'Scrum Guide',
+    paragraphIndex: Number(startParagraph.dataset.paragraphIndex),
+    start,
+    end
+  };
+}
+
 document.addEventListener('selectionchange', () => {
   if ((state.currentRoute || 'dashboard') === 'guide') captureGuideSelection(true);
 });
@@ -754,15 +804,18 @@ document.addEventListener('selectionchange', () => {
 function renderGuide() {
   const sections = guideSections || [];
   app.innerHTML = `
-    <section class="card">
+    <section class="card guide-tools-card">
       <h2>Scrum Guide</h2>
       <p>${esc(guideMeta.title || 'The Scrum Guide')} · ${esc(guideMeta.version || 'November 2020')} · ${esc(guideMeta.authors || 'Ken Schwaber & Jeff Sutherland')}</p>
+      <button class="guide-highlighter" id="guideHighlighter" type="button" aria-label="Highlight selected Scrum Guide text" title="Highlight selected text">
+        <span class="highlighter-icon" aria-hidden="true">▌</span>
+      </button>
       <div class="form-row">
         <div class="field"><label>Search guide</label><input id="guideSearch" type="search" placeholder="Search Product Owner, Increment, Sprint Review..." /></div>
         <div class="field"><label>Section</label><select id="guideSection"><option value="all">All sections</option>${sections.map(s => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join('')}</select></div>
-        <div class="field"><label>Action</label><button class="primary-btn" id="addSelectedGuide" type="button">Add selected text to Study Later</button></div>
+        <div class="field"><label>Actions</label><div class="button-stack"><button class="primary-btn" id="addSelectedGuide" type="button">Add selected text to Study Later</button></div></div>
       </div>
-      <p class="hint">Select any text inside the guide, then tap the button above. Your saved text stays on this device and appears in Study Later.</p>
+      <p class="hint">Select text inside one Scrum Guide paragraph and tap the small red marker to highlight it. Use the Study Later button separately when you want to save selected text for later review.</p>
       <details class="license-note"><summary>Attribution and license</summary><p>${esc(guideMeta.copyright || '© 2020 Ken Schwaber and Jeff Sutherland')}. Scrum Guide text is licensed under ${esc(guideMeta.license || 'CC BY-SA 4.0')}. This study app is not affiliated with Scrum.org.</p></details>
     </section>
     <section id="guideText" class="guide-text" style="margin-top:16px"></section>
@@ -771,11 +824,35 @@ function renderGuide() {
   const section = document.getElementById('guideSection');
   const update = () => drawGuide(search.value, section.value);
   [search, section].forEach(el => el.addEventListener('input', update));
-  document.getElementById('addSelectedGuide').addEventListener('click', () => {
+  const addSelectedToStudyLater = () => {
     const selected = captureGuideSelection(true) || lastGuideSelection;
     if (!selected || selected.length < 3) return alert('Select text from the Scrum Guide first.');
     addStudyLater(selected, lastGuideSection);
     window.getSelection?.().removeAllRanges?.();
+  };
+  document.getElementById('addSelectedGuide').addEventListener('click', addSelectedToStudyLater);
+  document.getElementById('guideHighlighter').addEventListener('click', () => {
+    const selectedRange = getSelectedGuideRange();
+    if (!selectedRange || normalizeText(selectedRange.text).length < 1) {
+      return alert('Select text from one Scrum Guide paragraph first.');
+    }
+    addGuideHighlight(selectedRange);
+    window.getSelection?.().removeAllRanges?.();
+    drawGuide(search.value, section.value);
+  });
+  document.getElementById('guideText').addEventListener('click', event => {
+    const target = event.target.closest?.('.guide-highlight');
+    if (!target) return;
+    const highlightId = target.dataset.highlightId;
+    if (!highlightId) return;
+    const text = normalizeText(target.textContent || '');
+    const message = text
+      ? `Delete this highlight?\n\n${text.slice(0, 180)}${text.length > 180 ? '...' : ''}`
+      : 'Delete this highlight?';
+    if (!confirm(message)) return;
+    state.guideHighlights = (state.guideHighlights || []).filter(item => item.id !== highlightId);
+    saveState();
+    drawGuide(search.value, section.value);
   });
   update();
 }
@@ -791,8 +868,130 @@ function drawGuide(query = '', selectedSection = 'all') {
     <article class="card guide-section" data-title="${esc(s.title)}">
       <div class="pill-row"><span class="pill">Scrum Guide</span><span class="pill">${esc(s.title)}</span></div>
       <h3>${esc(s.title)}</h3>
-      ${(s.paragraphs || []).map(p => `<p>${esc(p)}</p>`).join('')}
+      ${(s.paragraphs || []).map((p, index) => `<p class="guide-paragraph" data-section="${esc(s.title)}" data-paragraph-index="${index}">${renderGuideParagraph(p, s.title, index)}</p>`).join('')}
     </article>`).join('') : '<section class="card center"><h2>No guide text found</h2><p>Try a different search or section.</p></section>';
+}
+
+
+function normalizedTextMap(text) {
+  const chars = [];
+  const map = [];
+  let lastWasSpace = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (/\s/.test(ch)) {
+      if (!lastWasSpace && chars.length) {
+        chars.push(' ');
+        map.push(i);
+        lastWasSpace = true;
+      }
+    } else {
+      chars.push(ch.toLowerCase());
+      map.push(i);
+      lastWasSpace = false;
+    }
+  }
+  if (chars.at(-1) === ' ') {
+    chars.pop();
+    map.pop();
+  }
+  return { normalized: chars.join(''), map };
+}
+
+function findNormalizedRange(text, needle) {
+  const cleanNeedle = normalizeText(needle).toLowerCase();
+  if (!cleanNeedle) return null;
+  const haystack = normalizedTextMap(text);
+  const index = haystack.normalized.indexOf(cleanNeedle);
+  if (index === -1) return null;
+  const start = haystack.map[index];
+  const lastMapped = haystack.map[index + cleanNeedle.length - 1];
+  if (start === undefined || lastMapped === undefined) return null;
+  return { start, end: lastMapped + 1 };
+}
+
+function firstLegacyHighlightParagraph(sectionTitle, highlightText) {
+  const guideSection = guideSections.find(s => s.title === sectionTitle);
+  if (!guideSection) return -1;
+  return (guideSection.paragraphs || []).findIndex(p => findNormalizedRange(p, highlightText));
+}
+
+function renderGuideParagraph(text, sectionTitle, paragraphIndex) {
+  const ranges = [];
+  const highlights = (state.guideHighlights || [])
+    .filter(h => h.section === sectionTitle && normalizeText(h.text).length >= 1);
+
+  highlights.forEach(h => {
+    let range = null;
+    const hasExactRange = Number.isFinite(Number(h.paragraphIndex)) && Number.isFinite(Number(h.start)) && Number.isFinite(Number(h.end));
+
+    if (hasExactRange) {
+      const pIndex = Number(h.paragraphIndex);
+      const start = Number(h.start);
+      const end = Number(h.end);
+      if (pIndex === paragraphIndex && start >= 0 && end <= text.length && start < end) {
+        range = { start, end };
+      }
+    } else if (firstLegacyHighlightParagraph(sectionTitle, h.text) === paragraphIndex) {
+      // Old v5 highlights stored only the selected text. Render them once instead of on every matching word.
+      range = findNormalizedRange(text, h.text);
+    }
+
+    if (!range) return;
+    const overlaps = ranges.some(r => range.start < r.end && range.end > r.start);
+    if (!overlaps) ranges.push({ ...range, id: h.id });
+  });
+
+  if (!ranges.length) return esc(text);
+  ranges.sort((a, b) => a.start - b.start);
+  let html = '';
+  let cursor = 0;
+  ranges.forEach(range => {
+    html += esc(text.slice(cursor, range.start));
+    html += `<mark class="guide-highlight" data-highlight-id="${esc(range.id)}" title="Tap to delete this highlight">${esc(text.slice(range.start, range.end))}</mark>`;
+    cursor = range.end;
+  });
+  html += esc(text.slice(cursor));
+  return html;
+}
+
+function addGuideHighlight(selection) {
+  if (!selection || typeof selection !== 'object') return;
+  const section = selection.section || 'Scrum Guide';
+  const paragraphIndex = Number(selection.paragraphIndex);
+  const start = Number(selection.start);
+  const end = Number(selection.end);
+  const guideSection = guideSections.find(s => s.title === section);
+  const paragraph = guideSection?.paragraphs?.[paragraphIndex];
+
+  if (!paragraph || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > paragraph.length || start >= end) {
+    return alert('Please select text within a single Scrum Guide paragraph so it can be highlighted.');
+  }
+
+  const exactText = paragraph.slice(start, end);
+  const clean = normalizeText(exactText);
+  if (!clean) return;
+
+  state.guideHighlights = state.guideHighlights || [];
+  const duplicate = state.guideHighlights.some(item =>
+    item.section === section &&
+    Number(item.paragraphIndex) === paragraphIndex &&
+    Number(item.start) === start &&
+    Number(item.end) === end
+  );
+  if (duplicate) return alert('That exact selection is already highlighted.');
+
+  state.guideHighlights.unshift({
+    id: makeId('highlight'),
+    text: clean,
+    section,
+    paragraphIndex,
+    start,
+    end,
+    color: 'red',
+    date: Date.now()
+  });
+  saveState();
 }
 
 function addStudyLater(text, section = 'Scrum Guide') {
@@ -946,8 +1145,63 @@ function drawMistakes(query = '', topic = 'all') {
     </article>`).join('');
 }
 
+
+function exportStudyData() {
+  const payload = {
+    app: 'PSPO Study Coach',
+    version: 4,
+    exportedAt: new Date().toISOString(),
+    state
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pspo-study-coach-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importStudyData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}'));
+        const importedState = parsed.state || parsed;
+        if (!importedState || typeof importedState !== 'object') throw new Error('Invalid backup file.');
+        const merged = { ...defaultState(), ...importedState };
+        if (!Array.isArray(merged.studyLater)) merged.studyLater = [];
+        if (!Array.isArray(merged.guideHighlights)) merged.guideHighlights = [];
+        if (!Array.isArray(merged.customFlashcards)) merged.customFlashcards = [];
+        if (!Array.isArray(merged.customLessons)) merged.customLessons = [];
+        if (!confirm('Import this backup and replace the data saved on this device?')) return;
+        state = merged;
+        state.currentRoute = state.currentRoute || 'dashboard';
+        saveState();
+        alert('Data imported successfully.');
+        render();
+      } catch (err) {
+        alert('Could not import this file. Make sure it is a PSPO Study Coach JSON backup.');
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+  });
+  input.click();
+}
+
 function bindCommonActions() {
   document.querySelectorAll('[data-action="go"]').forEach(btn => btn.addEventListener('click', () => setRoute(btn.dataset.route)));
+  document.querySelectorAll('[data-action="export-data"]').forEach(btn => btn.addEventListener('click', exportStudyData));
+  document.querySelectorAll('[data-action="import-data"]').forEach(btn => btn.addEventListener('click', importStudyData));
 }
 
 render();

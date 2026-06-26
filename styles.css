@@ -378,3 +378,121 @@ textarea { resize: vertical; min-height: 96px; line-height: 1.45; }
   padding: 0;
   text-align: left;
 }
+
+/* Added in v3: floating red highlighter marker for the Scrum Guide tab */
+.guide-tools-card { position: relative; }
+.guide-highlighter {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right, 0px));
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 999px 0 0 999px;
+  padding: 12px 12px 12px 15px;
+  color: #fff;
+  background: linear-gradient(135deg, #db2f2f, #a13b3b);
+  box-shadow: 0 12px 28px rgba(161, 59, 59, 0.26);
+  font-weight: 900;
+}
+.guide-highlighter:active { transform: translateY(-50%) scale(0.98); }
+.highlighter-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 8px;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.22);
+  line-height: 1;
+  font-size: 1.15rem;
+}
+.highlighter-text { writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 0.02em; }
+
+@media (max-width: 760px) {
+  .guide-highlighter {
+    right: 0;
+    top: 44%;
+    min-height: 44px;
+    padding: 10px 9px 10px 12px;
+  }
+  .highlighter-text { font-size: 0.78rem; }
+}
+
+/* Red rounded marker beside the Guide navigation tab */
+.tab[data-route="guide"] {
+  position: relative;
+  padding-right: 34px;
+}
+.tab[data-route="guide"]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 14px;
+  height: 22px;
+  border-radius: 999px;
+  background: #db2f2f;
+  transform: translateY(-50%);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.12);
+}
+.tab[data-route="guide"].active::after {
+  background: #ffdfdf;
+}
+
+/* Added in v4: smaller highlight marker, persistent text highlights, and data backup controls */
+.button-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.guide-highlight {
+  background: rgba(219, 47, 47, 0.20);
+  border-bottom: 3px solid #db2f2f;
+  border-radius: 6px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.guide-highlighter {
+  min-height: 34px;
+  width: 36px;
+  height: 54px;
+  gap: 0;
+  padding: 9px 7px 9px 9px;
+  border-radius: 999px 0 0 999px;
+}
+.guide-highlighter .highlighter-icon {
+  width: 18px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 0;
+  background: rgba(255, 255, 255, 0.28);
+  position: relative;
+}
+.guide-highlighter .highlighter-icon::after {
+  content: "";
+  width: 6px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  opacity: 0.92;
+}
+.highlighter-text { display: none; }
+@media (max-width: 760px) {
+  .guide-highlighter {
+    top: 40%;
+    width: 32px;
+    height: 48px;
+    padding: 8px 6px 8px 8px;
+  }
+  .button-stack { flex-direction: column; }
+}
+
+
+/* Added in v5: individual highlight deletion */
+.guide-highlight:hover {
+  background: rgba(219, 47, 47, 0.28);
+}
