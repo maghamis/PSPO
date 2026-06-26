@@ -1,4 +1,4 @@
-const { lessons: baseLessons, flashcards: baseFlashcards, questions } = window.STUDY_DATA;
+const { lessons: baseLessons, flashcards: baseFlashcards, questions: baseQuestions } = window.STUDY_DATA;
 const guideSections = window.SCRUM_GUIDE?.sections || [];
 const guideMeta = window.SCRUM_GUIDE?.meta || {};
 let lastGuideSelection = '';
@@ -7,6 +7,8 @@ const STORAGE_KEY = 'pspo-study-coach-state-v1';
 const EXAM_QUESTION_COUNT = 80;
 const EXAM_DURATION_SEC = 60 * 60;
 const PASS_MARK = 85;
+const GITHUB_BANK_URL = 'https://raw.githubusercontent.com/Ditectrev/Scrum-Product-Owner-PSPO-I-Practice-Tests-Exams-Questions-Answers/main/README.md';
+const GITHUB_BANK_NAME = 'Ditectrev GitHub PSPO I question bank';
 
 const scrumChartGroups = [
   { title: 'Scrum Definition', className: 'definition', items: ['Scrum is a lightweight framework', 'Generate value', 'Adaptive solutions', 'Complex problems'] },
@@ -32,6 +34,7 @@ const defaultState = () => ({
   guideHighlights: [],
   customFlashcards: [],
   customLessons: [],
+  importedQuestions: [],
   activeQuiz: null,
   activeExam: null,
   currentRoute: 'dashboard'
@@ -79,8 +82,166 @@ function sampleQuestions(pool, count) {
   return chosen.slice(0, count).map((q, idx) => ({ ...q, sessionId: `${q.id}-${idx}` }));
 }
 
+
+function normalizeQuestionText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function questionKey(q) {
+  return normalizeQuestionText(q.prompt) + '|' + (q.options || []).map(normalizeQuestionText).join('|');
+}
+
+function dedupeQuestionList(list) {
+  const seen = new Set();
+  const unique = [];
+  list.forEach(q => {
+    if (!q || !q.prompt || !Array.isArray(q.options) || !Array.isArray(q.answer)) return;
+    const key = questionKey(q);
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(q);
+  });
+  return unique;
+}
+
+function questionBank() {
+  return dedupeQuestionList([...(baseQuestions || []), ...((state.importedQuestions || []))]);
+}
+
+function importedQuestionCount() {
+  return dedupeQuestionList(state.importedQuestions || []).length;
+}
+
+function simpleHash(text) {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  return Math.abs(hash).toString(36);
+}
+
+function cleanMarkdownText(text) {
+  return String(text || '')
+    .replace(/\[[^\]]+\]\([^\)]+\)/g, '$1')
+    .replace(/\*\*/g, '')
+    .replace(/`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function inferTopic(prompt, options = []) {
+  const text = `${prompt} ${(options || []).join(' ')}`.toLowerCase();
+  if (/product backlog|backlog item|pbi|ordering|refinement/.test(text)) return 'Product Backlog';
+  if (/product owner|stakeholder|customer|user|value|revenue|cost|satisfaction|market|tco|vision/.test(text)) return 'Product Owner & Value';
+  if (/definition of done|done|increment|quality|technical debt|release sprint|releas/.test(text)) return 'Increment & Definition of Done';
+  if (/sprint planning|sprint goal/.test(text)) return 'Sprint Planning & Sprint Goal';
+  if (/daily scrum|daily standup/.test(text)) return 'Daily Scrum';
+  if (/sprint review/.test(text)) return 'Sprint Review';
+  if (/retrospective/.test(text)) return 'Sprint Retrospective';
+  if (/scrum master|impediment|coach|facilitat/.test(text)) return 'Scrum Master';
+  if (/developer|developers|self-manag|cross-functional|scrum team|multiple teams|team membership/.test(text)) return 'Scrum Team & Developers';
+  if (/artifact|transparency|inspection|adaptation|empiricism/.test(text)) return 'Scrum Theory';
+  if (/commitment|focus|openness|respect|courage/.test(text)) return 'Scrum Values';
+  if (/sprint|timebox|event/.test(text)) return 'Scrum Events';
+  return 'Scrum Fundamentals';
+}
+
+function autoExplanationForQuestion(prompt, options, answer) {
+  const topic = inferTopic(prompt, options);
+  const generic = {
+    'Product Backlog': 'Use the Scrum Guide rule: the Product Backlog is an emergent, ordered list of what is needed to improve the product. The Product Owner is accountable for effective Product Backlog management, but the work can be done collaboratively or delegated while the Product Owner remains accountable.',
+    'Product Owner & Value': 'Use the Product Owner accountability: the Product Owner is accountable for maximizing the value of the product resulting from the Scrum Team’s work. Good answers usually focus on value, stakeholders, evidence, Product Goal, and Product Backlog ordering rather than task assignment or velocity as a value measure.',
+    'Increment & Definition of Done': 'Use the Increment and Definition of Done rules: work only counts as part of an Increment when it meets the Definition of Done. The Definition of Done creates transparency about quality and completion, and each Increment must be usable.',
+    'Sprint Planning & Sprint Goal': 'Use the Sprint Planning rule: the whole Scrum Team collaborates. The Product Owner brings the value objective and important Product Backlog items; Developers select work and plan how to deliver it; the Sprint Goal explains why the Sprint is valuable.',
+    'Daily Scrum': 'Use the Daily Scrum rule: it is a 15-minute event for the Developers to inspect progress toward the Sprint Goal and adapt the Sprint Backlog. It is not a status meeting for the Product Owner, Scrum Master, or management.',
+    'Sprint Review': 'Use the Sprint Review rule: the Scrum Team and stakeholders inspect the Sprint outcome and determine future adaptations. It is a working session for feedback and adaptation, not only a demo or approval gate.',
+    'Sprint Retrospective': 'Use the Sprint Retrospective rule: the Scrum Team inspects how the last Sprint went with regard to people, interactions, process, tools, and Definition of Done, then plans improvements to quality and effectiveness.',
+    'Scrum Master': 'Use the Scrum Master accountability: the Scrum Master establishes Scrum, helps people understand Scrum theory and practice, removes or causes removal of impediments, and improves Scrum Team effectiveness. The Scrum Master does not manage the team as a traditional project manager.',
+    'Scrum Team & Developers': 'Use the Scrum Team rule: the Scrum Team is cross-functional and self-managing. Developers are accountable for the Sprint Backlog, quality through the Definition of Done, adapting the plan daily, and holding each other accountable.',
+    'Scrum Theory': 'Use Scrum theory: Scrum is based on empiricism and lean thinking. Transparency enables meaningful inspection, and inspection enables adaptation. Answers that hide work, delay feedback, or reduce transparency are usually weak.',
+    'Scrum Values': 'Use the Scrum values: commitment, focus, openness, respect, and courage guide the Scrum Team’s behavior and support transparency, inspection, and adaptation.',
+    'Scrum Events': 'Use the Scrum events rule: Scrum events create regular opportunities for inspection and adaptation inside the Sprint. Events are timeboxed, and a new Sprint starts immediately after the previous Sprint ends.',
+    'Scrum Fundamentals': 'Use the Scrum Guide as the source of truth. Choose the answer that supports empiricism, transparency, self-management, clear accountability, and frequent delivery of valuable, usable Increments.'
+  };
+  return generic[topic] || generic['Scrum Fundamentals'];
+}
+
+function parseDitectrevMarkdown(markdown) {
+  const source = String(markdown || '').replace(/\r/g, '');
+  const marker = '**[⬆ Back to Top](#table-of-contents)**';
+  const bodyStart = source.indexOf(marker);
+  const body = bodyStart >= 0 ? source.slice(bodyStart) : source;
+  const sections = body.split(/\*\*\[⬆ Back to Top\]\(#table-of-contents\)\*\*\s*###\s*/g).slice(1);
+  const parsed = [];
+  sections.forEach((section, idx) => {
+    const firstOption = section.search(/-\s*\[[ xX]\]\s+/);
+    if (firstOption < 0) return;
+    let prompt = cleanMarkdownText(section.slice(0, firstOption));
+    const optionText = section.slice(firstOption);
+    const options = [];
+    const answer = [];
+    const optionRegex = /-\s*\[([ xX])\]\s*([\s\S]*?)(?=\s+-\s*\[[ xX]\]\s+|$)/g;
+    let match;
+    while ((match = optionRegex.exec(optionText)) !== null) {
+      let option = cleanMarkdownText(match[2]);
+      option = option.replace(/^Correct Answers?\s*:\s*/i, '').trim();
+      if (!option) continue;
+      const optionIndex = options.length;
+      options.push(option);
+      if (match[1].toLowerCase() === 'x') answer.push(optionIndex);
+    }
+    if (!prompt || options.length < 2 || !answer.length) return;
+    const type = options.length === 2 && /true|false/i.test(options.join(' ')) && answer.length === 1 ? 'truefalse' : answer.length > 1 ? 'multi' : 'single';
+    const topic = inferTopic(prompt, options);
+    parsed.push({
+      id: `github-ditectrev-${idx + 1}-${simpleHash(prompt)}`,
+      prompt,
+      options,
+      answer,
+      type,
+      topic,
+      explanation: autoExplanationForQuestion(prompt, options, answer),
+      ref: 'Ditectrev GitHub bank + Scrum Guide check',
+      source: 'github-ditectrev'
+    });
+  });
+  return dedupeQuestionList(parsed);
+}
+
+async function loadGithubQuestionBank() {
+  if (!confirm('Load the public GitHub question bank into this device? This will store the parsed questions locally in this browser.')) return;
+  try {
+    const response = await fetch(GITHUB_BANK_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const markdown = await response.text();
+    const parsed = parseDitectrevMarkdown(markdown);
+    if (!parsed.length) throw new Error('No questions found in the GitHub markdown.');
+    const existing = dedupeQuestionList(state.importedQuestions || []);
+    state.importedQuestions = dedupeQuestionList([...existing, ...parsed]);
+    state.activeQuiz = null;
+    state.activeExam = null;
+    saveState();
+    alert(`Loaded ${parsed.length} questions from the GitHub bank. Your combined random bank now has ${questionBank().length} unique questions.`);
+    render();
+  } catch (err) {
+    console.error(err);
+    alert('Could not load the GitHub bank. Check your internet connection, then try again. You can still use the built-in question bank.');
+  }
+}
+
+function removeImportedQuestionBank() {
+  if (!importedQuestionCount()) return alert('No imported GitHub questions are saved on this device.');
+  if (!confirm('Remove imported GitHub questions from this device? Your quiz/exam history and mistakes will remain.')) return;
+  state.importedQuestions = [];
+  state.activeQuiz = null;
+  state.activeExam = null;
+  saveState();
+  render();
+}
+
 function uniqueTopics() {
-  return [...new Set(questions.map(q => q.topic))].sort();
+  return [...new Set(questionBank().map(q => q.topic))].sort();
 }
 
 function arraysEqual(a, b) {
@@ -149,6 +310,8 @@ function renderDashboard() {
   const weakTopics = topicMistakes().slice(0, 5);
   const lastExam = state.examAttempts.at(-1);
   const lessonPct = pct(completed, lessonTotal);
+  const bank = questionBank();
+  const importedCount = importedQuestionCount();
 
   app.innerHTML = `
     <section class="grid two">
@@ -175,6 +338,20 @@ function renderDashboard() {
           <button class="secondary-btn" data-action="import-data" type="button">Import data</button>
         </div>
       </div>
+      <div class="card">
+        <h2>Question bank</h2>
+        <p>The Quiz and Exam sections now randomly sample from the combined bank: built-in questions plus any imported GitHub questions saved on this device.</p>
+        <div class="pill-row">
+          <span class="pill">${bank.length} unique total</span>
+          <span class="pill">${baseQuestions.length} built-in</span>
+          <span class="pill">${importedCount} imported</span>
+        </div>
+        <div class="button-row">
+          <button class="secondary-btn" data-action="load-github-bank" type="button">Load GitHub bank</button>
+          <button class="danger-btn" data-action="remove-github-bank" type="button">Remove imported bank</button>
+        </div>
+        <p class="small-note">Imported GitHub questions are stored locally and are included in export/import backups.</p>
+      </div>
     </section>
 
     <section class="grid three" style="margin-top:16px">
@@ -185,6 +362,7 @@ function renderDashboard() {
       ${metricCard('Best exam', examBest === null ? '—' : examBest + '%', '80 questions / 60 minutes')}
       ${metricCard('Mistakes saved', state.mistakes.length, 'Use Review tab')}
       ${metricCard('Study later', (state.studyLater || []).length, 'Saved Scrum Guide selections')}
+      ${metricCard('Question bank', bank.length, `${importedCount} imported`)}
     </section>
 
     <section class="grid two" style="margin-top:16px">
@@ -519,10 +697,10 @@ function renderQuiz() {
   app.innerHTML = `
     <section class="card">
       <h2>Practice quiz</h2>
-      <p>Use this mode for learning. You get instant feedback and every missed answer is saved for review.</p>
+      <p>Use this mode for learning. Questions are selected randomly from the combined question bank. You get instant feedback and every missed answer is saved for review.</p>
       <div class="form-row">
         <div class="field"><label>Topic</label><select id="quizTopic"><option value="all">All topics</option>${topics.map(t => `<option>${esc(t)}</option>`).join('')}</select></div>
-        <div class="field"><label>Questions</label><input id="quizCount" type="number" min="5" max="40" value="10" /></div>
+        <div class="field"><label>Questions</label><input id="quizCount" type="number" min="5" max="80" value="10" /></div>
         <div class="field"><label>Mode</label><select id="quizMode"><option value="instant">Instant feedback</option></select></div>
       </div>
       <div class="button-row"><button class="primary-btn" id="startQuiz">Start practice quiz</button></div>
@@ -533,13 +711,14 @@ function renderQuiz() {
     </section>`;
   document.getElementById('startQuiz').addEventListener('click', () => {
     const topic = document.getElementById('quizTopic').value;
-    const count = Math.max(5, Math.min(40, Number(document.getElementById('quizCount').value) || 10));
-    const pool = topic === 'all' ? questions : questions.filter(q => q.topic === topic);
+    const count = Math.max(5, Math.min(80, Number(document.getElementById('quizCount').value) || 10));
+    const bank = questionBank();
+    const pool = topic === 'all' ? bank : bank.filter(q => q.topic === topic);
     state.activeQuiz = {
       type: 'quiz',
       startedAt: Date.now(),
       topic,
-      questions: sampleQuestions(pool.length ? pool : questions, count),
+      questions: sampleQuestions(pool.length ? pool : bank, count),
       index: 0,
       answers: [],
       submitted: false,
@@ -555,7 +734,7 @@ function renderExam() {
   app.innerHTML = `
     <section class="card">
       <h2>Exam simulator</h2>
-      <p>Simulates PSPO I pressure: ${EXAM_QUESTION_COUNT} questions, 60 minutes, ${PASS_MARK}% pass target. Feedback is shown after finishing.</p>
+      <p>Simulates PSPO I pressure: ${EXAM_QUESTION_COUNT} questions, 60 minutes, ${PASS_MARK}% pass target. Questions are selected randomly from the combined bank. Feedback is shown after finishing.</p>
       <div class="pill-row">
         <span class="pill">${EXAM_QUESTION_COUNT} questions</span>
         <span class="pill">60 minutes</span>
@@ -572,7 +751,7 @@ function renderExam() {
       type: 'exam',
       startedAt: Date.now(),
       endsAt: Date.now() + EXAM_DURATION_SEC * 1000,
-      questions: sampleQuestions(questions, EXAM_QUESTION_COUNT),
+      questions: sampleQuestions(questionBank(), EXAM_QUESTION_COUNT),
       index: 0,
       answers: [],
       submitted: false,
@@ -1195,7 +1374,7 @@ function drawMistakes(query = '', topic = 'all') {
 function exportStudyData() {
   const payload = {
     app: 'PSPO Study Coach',
-    version: 4,
+    version: 8,
     exportedAt: new Date().toISOString(),
     state
   };
@@ -1228,6 +1407,7 @@ function importStudyData() {
         if (!Array.isArray(merged.guideHighlights)) merged.guideHighlights = [];
         if (!Array.isArray(merged.customFlashcards)) merged.customFlashcards = [];
         if (!Array.isArray(merged.customLessons)) merged.customLessons = [];
+        if (!Array.isArray(merged.importedQuestions)) merged.importedQuestions = [];
         if (!confirm('Import this backup and replace the data saved on this device?')) return;
         state = merged;
         state.currentRoute = state.currentRoute || 'dashboard';
@@ -1248,6 +1428,8 @@ function bindCommonActions() {
   document.querySelectorAll('[data-action="go"]').forEach(btn => btn.addEventListener('click', () => setRoute(btn.dataset.route)));
   document.querySelectorAll('[data-action="export-data"]').forEach(btn => btn.addEventListener('click', exportStudyData));
   document.querySelectorAll('[data-action="import-data"]').forEach(btn => btn.addEventListener('click', importStudyData));
+  document.querySelectorAll('[data-action="load-github-bank"]').forEach(btn => btn.addEventListener('click', loadGithubQuestionBank));
+  document.querySelectorAll('[data-action="remove-github-bank"]').forEach(btn => btn.addEventListener('click', removeImportedQuestionBank));
 }
 
 render();

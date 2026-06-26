@@ -13,6 +13,9 @@ A static Progressive Web App (PWA) for studying Professional Scrum Product Owner
 - Add your own lessons/notes manually
 - Flashcards with simple spaced repetition
 - Practice quiz with instant feedback
+- Optional GitHub question-bank loader that parses the public Ditectrev PSPO I markdown bank into local storage
+- Auto-generated study explanations for imported GitHub questions that do not include explanations
+- Quiz and Exam randomly sample from the combined built-in + imported question bank
 - Exam simulator: 80 questions, 60 minutes, 85% target
 - Mistake review with explanations
 - Offline caching after first load
@@ -90,3 +93,15 @@ This app is not affiliated with Scrum.org and does not include official Scrum.or
 - Reordered tabs to: Dashboard, Chart, Guide, Learn, Study Later, Cards, Quiz, Exam, Review.
 - Added a Scrum Guide visual map with the same six-color scheme: Scrum Definition, Scrum Team, Scrum Artifacts, Scrum Events, Scrum Theory, and Scrum Values.
 - The chart is horizontally scrollable on small iPhone screens.
+
+
+## v8 update
+
+- Added a **Question bank** panel on the Dashboard.
+- Added **Load GitHub bank** to parse the public Ditectrev PSPO I GitHub README into local storage on your own device.
+- The app does not hard-code the third-party GitHub questions in the zip; it loads them from the public source when you press the button, then stores them locally.
+- Imported GitHub questions are deduplicated against the built-in bank.
+- Imported questions receive concise auto-generated explanations based on Scrum Guide concepts when no explanation is provided.
+- Quiz and Exam now randomly sample from the combined bank.
+- Export/import backups now include imported questions.
+- Offline cache updated to v8.
